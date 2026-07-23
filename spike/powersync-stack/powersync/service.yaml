@@ -1,0 +1,43 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/service-schema@latest/json-schema/powersync-config.json
+#
+# `!env PS_*` substitutes an environment variable; only PS_-prefixed names work.
+
+telemetry:
+  disable_telemetry_sharing: true
+
+# ------------------------------------------------------------------ source DB
+replication:
+  connections:
+    - type: postgresql
+      uri: !env PS_DATA_SOURCE_URI
+      sslmode: disable # container-to-container on a private compose network
+
+# ------------------------------------------------------------ bucket storage
+# The ADR 0003 claim under test: Postgres, not MongoDB -- and the SAME container
+# as the source, just a different database. Legal from Postgres 14 up.
+storage:
+  type: postgresql
+  uri: !env PS_STORAGE_SOURCE_URI
+  sslmode: disable
+
+port: !env PS_PORT
+
+sync_config:
+  path: sync-config.yaml
+
+# --------------------------------------------------------------- client auth
+# RS256 via JWKS served by our own TS API (ADR 0004). allow_local_jwks is what
+# lets the service trust a JWKS URL on the private compose network.
+client_auth:
+  jwks_uri: !env PS_JWKS_URL
+  allow_local_jwks: true
+  audience: ['powersync-practice']
+
+api:
+  tokens:
+    - spike-only-admin-token
+
+system:
+  logging:
+    level: info
+    format: text

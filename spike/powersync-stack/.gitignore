@@ -1,0 +1,5 @@
+# Downloaded at run time by client-dart/run.sh
+client-dart/libpowersync_x64.so
+# Local SQLite the scratch client syncs into
+client-dart/*.db
+client-dart/*.db-*

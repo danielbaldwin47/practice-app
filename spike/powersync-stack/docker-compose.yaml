@@ -1,0 +1,135 @@
+# ADR 0003's topology, as one Compose file: postgres (two databases) +
+# powersync-service + minio + TS api + cloudflared. No MongoDB.
+#
+# Every published port is bound to 127.0.0.1 -- this stack is a spike sharing a
+# live NAS with production apps, and nothing here should be reachable from the LAN.
+name: psspike
+
+services:
+  # ONE Postgres container. `practice` is the app source DB; `powersync_storage`
+  # is PowerSync's bucket storage, created by postgres/init/01-init.sql.
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=10
+      - -c
+      - max_wal_senders=10
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${PG_SUPERUSER_PASSWORD}
+      POSTGRES_DB: practice
+    volumes:
+      - pg_data:/var/lib/postgresql
+      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "127.0.0.1:${HOST_PG_PORT}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d practice"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build: ./api
+    restart: unless-stopped
+    environment:
+      PORT: 6060
+      DATABASE_URI: postgres://practice_api:${PG_API_PASSWORD}@postgres:5432/practice
+      S3_ENDPOINT: http://minio:9000
+      # Origin the DEVICE will use. In production this is MinIO's tunnel hostname;
+      # for the spike it is the loopback port, which is what a host-side client sees.
+      S3_PUBLIC_ENDPOINT: http://127.0.0.1:${HOST_MINIO_PORT}
+      S3_ACCESS_KEY: ${MINIO_ROOT_USER}
+      S3_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      S3_BUCKET: practice-audio
+      POWERSYNC_PUBLIC_URL: http://localhost:${HOST_POWERSYNC_PORT}
+      KEY_FILE: /data/jwks.json
+    volumes:
+      - api_keys:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${HOST_API_PORT}:6060"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:6060/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  powersync:
+    image: journeyapps/powersync-service:1.23.3
+    restart: unless-stopped
+    command: ["start", "-r", "unified"] # API server + replication worker in one container
+    # The image runs as uid 901 (`web`), but TrueNAS App_Data datasets are 770
+    # root:root -- 901 cannot even traverse the path to a bind-mounted config.
+    # Overriding the GID to 0 borrows the directory's group bits. A real install
+    # should instead give the app its own dataset owned by 901.
+    user: "901:0"
+    volumes:
+      - ./powersync:/config:ro
+    environment:
+      POWERSYNC_CONFIG_PATH: /config/service.yaml
+      NODE_OPTIONS: --max-old-space-size=1000
+      PS_PORT: 8080
+      PS_DATA_SOURCE_URI: postgres://powersync_repl:${PG_REPL_PASSWORD}@postgres:5432/practice
+      PS_STORAGE_SOURCE_URI: postgres://powersync_storage_user:${PG_STORAGE_PASSWORD}@postgres:5432/powersync_storage
+      PS_JWKS_URL: http://api:6060/api/auth/keys
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${HOST_POWERSYNC_PORT}:8080"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:8080/probes/liveness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "127.0.0.1:${HOST_MINIO_PORT}:9000"
+      - "127.0.0.1:${HOST_MINIO_CONSOLE_PORT}:9001"
+
+  # One-shot: create the audio bucket, then exit.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      sh -c "until mc alias set spike http://minio:9000 ${MINIO_ROOT_USER} ${MINIO_ROOT_PASSWORD}; do sleep 2; done;
+             mc mb --ignore-existing spike/practice-audio;
+             echo bucket-ready"
+    restart: "no"
+
+  # ADR 0004. Off by default: starting it needs a real tunnel credential, which a
+  # spike has no business minting. `docker compose --profile tunnel up cloudflared`
+  # once TUNNEL_TOKEN is set.
+  cloudflared:
+    image: cloudflare/cloudflared:2026.7.2
+    profiles: ["tunnel"]
+    restart: unless-stopped
+    command: ["tunnel", "--no-autoupdate", "run", "--token", "${TUNNEL_TOKEN:-}"]
+    depends_on:
+      - powersync
+      - api
+
+volumes:
+  pg_data:
+  minio_data:
+  api_keys:
