@@ -43,3 +43,27 @@ _Avoid_: pinned notes, sticky notes
 **Progress**:
 A Subject's browsable history — dated block notes and attached recordings over time, read like a teacher reviewing an exercise. Not computed metrics; goals (e.g. a BPM target) stay plain text. No trivia stats, no gamification.
 _Avoid_: stats, analytics, streaks
+
+**Library**:
+The filing cabinet for Materials — the one organized place, with freely nesting folders. The flatness rule protects the notebook, not the cabinet. All sources (local files, purchases, YouTube ingests) file here; Subject attachments are references into it.
+_Avoid_: media library, file manager
+
+**Material**:
+An item in the Library — an audio track, a PDF, a book. Carries a card catalog (contents index) once scanned; the durable thing loops, playlists, and attachments point at.
+_Avoid_: asset, file, document
+
+**Take**:
+One captured recording. Auto-saves with star flag and one-line note; optional BPM stamp from a running metronome; non-destructive trim bounds. Auto-tags to the active Block's Subject, one tap to override. Metadata syncs everywhere; audio bytes fetch on demand, pinnable.
+_Avoid_: recording file, clip
+
+**Loop**:
+A saved A–B region on a Material with a note and its own speed/pitch settings. Lives with the Material, plays in the single app player.
+_Avoid_: region, marker pair
+
+**Pattern Book**:
+The top-level collection of named patterns, fed by clipping looper regions. A pattern's name is the librarian's matching handle. Optional, unenforced Wendel six-checkbox cross-off per pattern.
+_Avoid_: lick library, exercise bank
+
+**Chip / Token**:
+Two link kinds. A chip is link metadata beside a line (a Focus goal or Block) — it never mutates the text; corrections teach aliases. A token is an inline entity reference embedded in text via the `/` finder; a dangling token renders as plain text.
+_Avoid_: tag, mention, backlink
