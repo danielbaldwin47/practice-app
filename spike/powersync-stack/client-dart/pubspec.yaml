@@ -1,0 +1,15 @@
+name: practice_spike_client
+description: Scratch PowerSync client for the ADR 0003 topology spike.
+version: 1.0.0
+publish_to: none
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  http: ^1.6.0
+  # NOTE: `powersync_core` is the non-Flutter Dart SDK and is marked DISCONTINUED
+  # in favour of `powersync` (Flutter). It is used here only because the NAS has
+  # no Flutter toolchain; the real client must depend on `powersync`.
+  powersync_core: ^1.8.0
+  uuid: ^4.6.0

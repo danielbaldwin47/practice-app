@@ -1,0 +1,24 @@
+# yaml-language-server: $schema=https://unpkg.com/@powersync/service-sync-rules@latest/schema/sync_rules.json
+#
+# Sync Streams, edition 3. Every stream is scoped to auth.user_id() -- the `sub`
+# claim of the JWT our API issues (ADR 0004) -- so a device only ever receives its
+# own rows. With 2-3 private users this is the whole access-control story.
+
+config:
+  edition: 3
+
+streams:
+  # The day pages and their timed blocks: small, always wanted, always resident.
+  my_sessions:
+    auto_subscribe: true
+    query: SELECT * FROM sessions WHERE owner_id = auth.user_id()
+
+  my_blocks:
+    auto_subscribe: true
+    query: SELECT * FROM blocks WHERE owner_id = auth.user_id()
+
+  # Attachment METADATA syncs everywhere; the audio bytes stay in MinIO and are
+  # fetched on demand by the SDK's attachment queue (ADR 0002).
+  my_recordings:
+    auto_subscribe: true
+    query: SELECT * FROM recordings WHERE owner_id = auth.user_id()
